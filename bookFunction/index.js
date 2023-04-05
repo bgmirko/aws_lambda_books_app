@@ -11,6 +11,8 @@ import { v4 as uuidv4 } from "uuid";
 import jwt_decode from "jwt-decode";
 import { PublishCommand } from "@aws-sdk/client-sns";
 import { snsClient } from "./snsClient.js";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { sqsClient } from "./sqsClient.js";
 
 export const handler = async (event) => {
   let body = JSON.stringify("Hello from Lambda!");
@@ -70,6 +72,7 @@ const createNewBook = async (event) => {
     const createBook = await ddbClient.send(new PutItemCommand(params));
 
     await sendTopicBookCreated();
+    await sendSQSMessageBookCreated();
     return createBook;
   } catch (e) {
     console.error(e);
@@ -227,11 +230,27 @@ const authorActionOnOwnBook = async (bookUuid, userUuid) => {
 const sendTopicBookCreated = async () => {
   const params = {
     TopicArn: `arn:aws:sns:${process.env.REGION}:${process.env.ACCOUNT_ID}:BookCreated`,
-    Message: JSON.stringify({ "message": "New Book Created" }),
+    Message: JSON.stringify({ message: "New Book Created" }),
   };
 
   try {
     const data = await snsClient.send(new PublishCommand(params));
+    console.log("Success", data);
+  } catch (err) {
+    console.log("Error", err);
+  }
+};
+
+const sendSQSMessageBookCreated = async () => {
+  const params = {
+    QueueUrl: `https://sqs.${process.env.REGION}.amazonaws.com/${process.env.ACCOUNT_ID}/book-created-queue`,
+    DelaySeconds: 10,
+    MessageBody: JSON.stringify({
+      message: "Book created SQS send queue message with aws sdk",
+    }),
+  };
+  try {
+    const data = await sqsClient.send(new SendMessageCommand(params));
     console.log("Success", data);
   } catch (err) {
     console.log("Error", err);
